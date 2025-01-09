@@ -7,17 +7,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useTaskContext } from '@/context';
 import { cn } from '@/lib/utils';
+import { Task } from '@/types/task';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { CalendarIcon, Star } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import React from 'react';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 
 export default function New() {
+  const router = useRouter();
+  const { addTemporaryTask } = useTaskContext();
   const [subject, setSubject] = React.useState<string>('');
   const [startDate, setStartDate] = React.useState<Date>();
   const [endDate, setEndDate] = React.useState<Date>();
   const [level, setLevel] = React.useState<string>('2');
+  const [showAlert, setShowAlert] = React.useState(false);
+  const [alertMessage, setAlertMessage] = React.useState<string>('');
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSubject(event.target.value);
@@ -27,8 +42,50 @@ export default function New() {
   const handleValueChange = (value: string) => {
     setLevel(value);
   };
+
+  const handleClick = async () => {
+    if (!subject || !startDate || !endDate) {
+      setShowAlert(true);
+      return;
+    }
+
+    const result = await fetch('/api/plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: subject,
+        startDate: startDate,
+        endDate: endDate,
+        level: level,
+      }),
+    });
+
+    if (!result.ok) {
+      setAlertMessage('エラーが発生しました。再度お試しください。');
+      setShowAlert(true);
+      return;
+    }
+
+    const data = await result.json();
+    data.map((todo: Task) => addTemporaryTask(todo));
+
+    router.push('/new/confirm');
+  };
   return (
     <div className="container space-y-6 py-12">
+      <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
+        <AlertDialogTrigger asChild>
+          <Button onClick={() => setShowAlert(true)} style={{ display: 'none' }}>
+            警告
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogTitle>警告</AlertDialogTitle>
+          <AlertDialogDescription>
+            {showAlert ? alertMessage : '教科、開始日、終了日をすべて選択してください。'}
+          </AlertDialogDescription>
+          <AlertDialogAction onClick={() => setShowAlert(false)}>閉じる</AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
       <Card>
         <CardHeader>
           <CardTitle>STEP1 科目名を入力</CardTitle>
@@ -150,7 +207,7 @@ export default function New() {
           </div>
         </CardContent>
       </Card>
-      <Button>計画を立てる</Button>
+      <Button onClick={handleClick}>計画を立てる</Button>
     </div>
   );
 }
